@@ -74,7 +74,7 @@ EXTERN_CVAR(Int, adl_volume_model)
 EXTERN_CVAR (Int, gl_texture_hqresize_targets)
 EXTERN_CVAR(Int, wipetype)
 
-#ifdef _WIN32
+#if defined _WIN32 && !defined _UWP_PLAT
 EXTERN_CVAR(Int, in_mouse)
 #endif
 
@@ -136,6 +136,9 @@ FGameConfigFile::FGameConfigFile ()
 		SetValueForKey ("Path", local_app_support, true);
 #elif !defined(__unix__)
 		SetValueForKey ("Path", "$PROGDIR", true);
+#ifdef _UWP_PLAT
+		SetValueForKey ("Path", ".", true);
+#endif
 #else
 		SetValueForKey ("Path", "$HOME/" GAME_DIR, true);
 		SetValueForKey ("Path", SHARE_DIR, true);
@@ -548,7 +551,7 @@ void FGameConfigFile::DoGlobalSetup ()
 			if (last < 221)
 			{
 				// Transfer the messed up mouse scaling config to something sane and consistent.
-#ifndef _WIN32
+#if !defined _WIN32 || defined _UWP_PLAT
 				double xfact = 3, yfact = 2;
 #else
 				double xfact = in_mouse == 1? 1.5 : 4, yfact = 1;

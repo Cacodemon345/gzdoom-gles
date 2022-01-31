@@ -31,6 +31,7 @@
 **
 */
 
+#ifndef ZMUSIC_STATIC
 #include "i_module.h"
 
 #ifdef _WIN32
@@ -46,6 +47,14 @@
 #define GetProcAddress(a,b) dlsym((a),(b))
 #define FreeLibrary(x) dlclose((x))
 using HMODULE = void*;
+#elif defined _UWP_PLAT
+HMODULE LoadPackagedLibraryA(const char* lib)
+{
+	FString libstr(lib);
+	libstr.ReplaceChars('/', '\\');
+	return LoadPackagedLibrary(libstr.WideString().c_str(), 0);
+}
+#define LoadLibraryA(x) LoadPackagedLibraryA(x)
 #endif
 
 bool FModule::Load(std::initializer_list<const char*> libnames)
@@ -83,7 +92,7 @@ void FModule::Unload()
 
 bool FModule::Open(const char* lib)
 {
-#ifdef _WIN32
+#if defined _WIN32 && !defined _UWP_PLAT
 	if((handle = GetModuleHandleA(lib)) != nullptr)
 		return true;
 #else
@@ -106,3 +115,4 @@ void FModule_SetProgDir(const char* progdir)
 {
 	module_progdir = progdir;
 }
+#endif

@@ -39,8 +39,23 @@ static void* PosixGetProcAddress (const GLubyte* name)
     return dlsym(h, (const char*)name);
 }
 #endif /* __sgi || __sun || __unix__ */
+#ifdef _UWP_PLAT
+#ifdef _MSC_VER
+// disable inlining here because it creates an incredible amount of bloat in this file.
+#pragma inline_depth(0)
+#pragma warning(disable: 4055)
+#pragma warning(disable: 4054)
+#pragma warning(disable: 4996)
+#endif
 
-#if defined(_WIN32)
+#ifdef ZMUSIC_STATIC
+#define KHRONOS_STATIC
+#endif
+
+#include <EGL/egl.h>
+
+#define IntGetProcAddress(a) eglGetProcAddress(a);
+#elif defined(_WIN32)
 
 #ifdef APIENTRY
 #undef APIENTRY

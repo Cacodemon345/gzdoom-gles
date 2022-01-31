@@ -99,7 +99,7 @@ namespace swrenderer
 		
 		renderHUDModel = r_modelscene && IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player);
 
-		FDynamicColormap *basecolormap;
+		FDynamicColormap *basecolormap = nullptr;
 		CameraLight *cameraLight = CameraLight::Instance();
 		auto nc = !!(Thread->Viewport->Level()->flags3 & LEVEL3_NOCOLOREDSPRITELIGHTING);
 

@@ -827,14 +827,17 @@ FString ExpandEnvVars(const char *searchpathstring)
 			{
 				out += progdir;
 			}
+#ifndef _UWP_PLAT
 			else
 			{
 				char *varvalue = getenv(varname);
+
 				if ( (varvalue != NULL) && (strlen(varvalue) != 0) )
 				{
 					out += varvalue;
 				}
 			}
+#endif
 		}
 		else
 		{

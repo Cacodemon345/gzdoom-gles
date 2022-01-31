@@ -137,7 +137,7 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 	texformat = GL_BGRA;
 #else
 	sourcetype = GL_BGRA;
-	texformat = GL_RGBA;
+	texformat = GL_BGRA;
 #endif
 	glTexImage2D(GL_TEXTURE_2D, 0, texformat, rw, rh, 0, sourcetype, GL_UNSIGNED_BYTE, buffer);
 

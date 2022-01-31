@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Package
+	xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"	xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+	xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+	IgnorableNamespaces="uap uap5 mp rescap">
+
+	<Identity Name="A6CF307C-466A-330A-9C25-0BDC8EDA0A9C" Publisher="CN=CMake" Version="1.0.0.0" />
+	<mp:PhoneIdentity PhoneProductId="A6CF307C-466A-330A-9C25-0BDC8EDA0A9C" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+	<Properties>
+		<DisplayName>gzdoom</DisplayName>
+		<PublisherDisplayName>CMake</PublisherDisplayName>
+		<Logo>zdoom.dir\StoreLogo.png</Logo>
+	</Properties>
+	<Dependencies>
+		<TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
+	</Dependencies>
+	<Resources>
+		<Resource Language="x-generate" />
+	</Resources>
+	<Applications>
+    <Application Id="App" Executable="gzdoom.exe" EntryPoint="zdoom.App">
+      <uap:VisualElements
+				DisplayName="GZDoom"
+				Description="A powerful Doom source port."
+				BackgroundColor="#336699"
+				Square150x150Logo="zdoom.dir\Logo.png"
+				Square44x44Logo="zdoom.dir\SmallLogo44x44.png">
+        <uap:SplashScreen Image="zdoom.dir\SplashScreen.png" />
+        <uap:DefaultTile Square71x71Logo="zdoom.dir\SmallTile.png" Wide310x150Logo="zdoom.dir\WideTile.png" Square310x310Logo="zdoom.dir\LargeTile.png"/>
+      </uap:VisualElements>
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="gzdoom-uwp.exe"/>
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+	</Applications>
+  <Capabilities>
+      <rescap:Capability Name="confirmAppClose"/>
+  </Capabilities>
+</Package>

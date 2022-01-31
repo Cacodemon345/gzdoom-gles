@@ -15,6 +15,10 @@ if( COMMAND cmake_policy )
 	endif()
 endif()
 
+if(NOT CMAKE_MSVC_RUNTIME_LIBRARY)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>$<IF:${WINDOWS_STORE},DLL, >")
+endif()
+
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
 include( FindPackageHandleStandardArgs )
 
@@ -22,6 +26,15 @@ include( FindPackageHandleStandardArgs )
 option( FORCE_CROSSCOMPILE "Turn on cross compiling." NO )
 if( FORCE_CROSSCOMPILE )
 	set( CMAKE_CROSSCOMPILING TRUE )
+endif()
+
+if( ${CMAKE_SYSTEM_NAME} STREQUAL "WindowsStore")
+	if ( NOT CMAKE_CROSSCOMPILING )
+		message( FATAL_ERROR "UWP target is not supported when not cross-compiling" )
+	endif()
+	set( UWP_PLATFORM TRUE )
+else()
+	set( UWP_PLATFORM FALSE )
 endif()
 
 if(CMAKE_CROSSCOMPILING)
@@ -195,7 +208,7 @@ include( TargetArch )
 
 target_architecture(ZDOOM_TARGET_ARCH)
 
-if( ${ZDOOM_TARGET_ARCH} MATCHES "x86_64" )
+if( ${ZDOOM_TARGET_ARCH} MATCHES "x86_64"  AND NOT UWP_PLATFORM )
 	set( HAVE_VM_JIT ON )
 endif()
 
@@ -211,7 +224,10 @@ option (HAVE_VULKAN "Enable Vulkan support" ON)
 if( MSVC )
 	# Eliminate unreferenced functions and data
 	# Perform identical COMDAT folding
-	set( REL_LINKER_FLAGS "/opt:ref /opt:icf /nodefaultlib:msvcrt /TSAWARE /LARGEADDRESSAWARE" )
+	set( REL_LINKER_FLAGS "/opt:ref /opt:icf /TSAWARE /LARGEADDRESSAWARE" )
+	if (NOT WINDOWS_STORE)
+		set( REL_LINKER_FLAGS "${REL_LINKER_FLAGS} /nodefaultlib:msvcrt" )
+	endif()
 
 	# String pooling
 	# Function-level linking
@@ -225,7 +241,10 @@ if( MSVC )
 	# Use SSE 2 as minimum always as the true color drawers needs it for __vectorcall
 	#set( ALL_C_FLAGS "${ALL_C_FLAGS} /arch:SSE2") # This is already the default
 
-
+	if (UWP_PLATFORM)
+		# Two phase lookup is unsupported.
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} /ZW /Zc:twoPhase- /DNOMINMAX")
+	endif()
 
 	# Avoid CRT DLL dependancies in release builds, optionally generate assembly output for checking crash locations.
 	option( ZDOOM_GENERATE_ASM "Generate assembly output." OFF )
@@ -237,21 +256,34 @@ if( MSVC )
 
 
 	# Debug allocations in debug builds
-	set( DEB_C_FLAGS "/D _CRTDBG_MAP_ALLOC /MTd" )
+	set( DEB_C_FLAGS "/D _CRTDBG_MAP_ALLOC" )
+	if (UWP_PLATFORM)
+		set( DEB_C_FLAGS "${DEB_C_FLAGS} /MDd")
+		set( REL_C_FLAGS "${REL_C_FLAGS} /MD" )
+	else()
+		set( DEB_C_FLAGS "${DEB_C_FLAGS} /MTd")
+		set( REL_C_FLAGS "${REL_C_FLAGS} /MT" )
+	endif()
 
 	# Disable warnings for unsecure CRT functions from VC8+
-	set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4996 /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0600" )
+	if (UWP_PLATFORM)
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4996 /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0602" )
+	else()
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4996 /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0600" )
+	endif()
 
 	# The CMake configurations set /GR and /MD by default, which conflict with our settings.
-	string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE} )
-	string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_MINSIZEREL ${CMAKE_CXX_FLAGS_MINSIZEREL} )
-	string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} )
 	string(REPLACE "/Ob1 " "/Ob2 " CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} )
-	string(REPLACE "/MDd " " " CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG} )
-	string(REPLACE "/MD " " " CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE} )
-	string(REPLACE "/MD " " " CMAKE_C_FLAGS_MINSIZEREL ${CMAKE_C_FLAGS_MINSIZEREL} )
-	string(REPLACE "/MD " " " CMAKE_C_FLAGS_RELWITHDEBINFO ${CMAKE_C_FLAGS_RELWITHDEBINFO} )
-	string(REPLACE "/MDd " " " CMAKE_C_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG} )
+	if (NOT UWP_PLATFORM)
+		string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE} )
+		string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_MINSIZEREL ${CMAKE_CXX_FLAGS_MINSIZEREL} )
+		string(REPLACE "/MD " " " CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} )
+		string(REPLACE "/MDd " " " CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG} )
+		string(REPLACE "/MD " " " CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE} )
+		string(REPLACE "/MD " " " CMAKE_C_FLAGS_MINSIZEREL ${CMAKE_C_FLAGS_MINSIZEREL} )
+		string(REPLACE "/MD " " " CMAKE_C_FLAGS_RELWITHDEBINFO ${CMAKE_C_FLAGS_RELWITHDEBINFO} )
+		string(REPLACE "/MDd " " " CMAKE_C_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG} )
+	endif()
 else()
 	set( REL_LINKER_FLAGS "" )
 	if ( HAVE_VULKAN )
@@ -401,12 +433,22 @@ option( DYN_OPENAL "Dynamically load OpenAL" ON )
 add_subdirectory( libraries/lzma )
 add_subdirectory( tools )
 add_subdirectory( libraries/gdtoa )
+# Swap building orders on UWP. Needed for asset copying.
+if ( UWP_PLATFORM )
 add_subdirectory( wadsrc )
 add_subdirectory( wadsrc_bm )
 add_subdirectory( wadsrc_lights )
 add_subdirectory( wadsrc_extra )
 add_subdirectory( wadsrc_widescreen )
+endif()
 add_subdirectory( src )
+if ( NOT UWP_PLATFORM )
+add_subdirectory( wadsrc )
+add_subdirectory( wadsrc_bm )
+add_subdirectory( wadsrc_lights )
+add_subdirectory( wadsrc_extra )
+add_subdirectory( wadsrc_widescreen )
+endif()
 
 if( NOT CMAKE_CROSSCOMPILING )
 	export(TARGETS ${CROSS_EXPORTS} FILE "${CMAKE_BINARY_DIR}/ImportExecutables.cmake" )

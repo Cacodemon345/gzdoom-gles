@@ -123,7 +123,7 @@ namespace OpenGLESRenderer
 
 		if (!gladLoadGLES2Loader(&LoadGLES2Proc))
 		{
-			exit(-1);
+			I_FatalError("Failed to load OpenGL functions.");
 		}
 
 		glMapBufferRange = (PFNGLMAPBUFFERRANGEEXTPROC)LoadGLES2Proc("glMapBufferRange");

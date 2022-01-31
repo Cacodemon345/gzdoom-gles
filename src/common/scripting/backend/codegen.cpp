@@ -8036,7 +8036,7 @@ FxExpression *FxMemberFunctionCall::Resolve(FCompileContext& ctx)
 			}
 			// No need to create a dedicated node here, all builtins map directly to trivial operations.
 			Self->ValueType = TypeSInt32;	// all builtins treat the texture index as integer.
-			FxExpression *x;
+			FxExpression *x = nullptr;
 			switch (MethodName.GetIndex())
 			{
 			case NAME_IsValid:

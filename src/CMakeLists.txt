@@ -14,17 +14,23 @@ include( CheckIncludeFiles )
 include( CheckLibraryExists )
 include( FindPkgConfig )
 
-if( MSVC )
+if( MSVC AND NOT WINDOWS_STORE )
 	find_package( ZMusic )
 else()
 	find_package( ZMusic REQUIRED )
 endif()
 
+if( WINDOWS_STORE )
+	find_package( unofficial-angle CONFIG REQUIRED )
+	target_link_libraries(main PRIVATE unofficial::angle::libEGL unofficial::angle::libANGLE unofficial::angle::libGLESv2 unofficial::angle::angle_common)
+endif()
+
 message("Building for target architecture: ${ZDOOM_TARGET_ARCH}")
 
-if( MSVC AND NOT ZMUSIC_FOUND )
+if( MSVC AND NOT ZMUSIC_FOUND AND NOT UWP_PLATFORM )
 	# Use prebuilt library
 	set( ZMUSIC_ROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../bin/windows/zmusic" )
+
 	set( ZMUSIC_INCLUDE_DIR ${ZMUSIC_ROOT_PATH}/include )
 	set( ZMUSIC_LIBRARIES zmusic )
 	if( ${ZDOOM_TARGET_ARCH} MATCHES "x86_64" )
@@ -74,7 +80,7 @@ if( WIN32 )
 	add_definitions( -D_WIN32 )
 
 
-	if( MSVC )	# For VS 2017 and later.
+	if( MSVC AND NOT UWP_PLATFORM )	# For VS 2017 and later.
 		# for modern Windows SDKs the DirectX headers should be available by default.
 		set( DX_dinput8_LIBRARY dinput8 )
 	else()
@@ -100,29 +106,36 @@ if( WIN32 )
 		endif()
 	endif()
 
-	set( ZDOOM_LIBS
-		wsock32
-		winmm
-		"${DX_dinput8_LIBRARY}"
-		ole32
-		user32
-		gdi32
-		comctl32
-		comdlg32
-		ws2_32
-		setupapi
-		oleaut32
-		dbghelp )
+	if( NOT UWP_PLATFORM)
+		set( ZDOOM_LIBS
+			wsock32
+			winmm
+			"${DX_dinput8_LIBRARY}"
+			ole32
+			user32
+			gdi32
+			comctl32
+			comdlg32
+			ws2_32
+			setupapi
+			oleaut32
+			dbghelp
+			psapi )
 
-	if( NOT ZD_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
-		set( ZDOOM_LIBS ${ZDOOM_LIBS} DelayImp )
-	endif()
-
-	if( ZD_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
-		if( DX_dxguid_LIBRARY )
-			list( APPEND ZDOOM_LIBS "${DX_dxguid_LIBRARY}" )
+		if( NOT ZD_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
+			set( ZDOOM_LIBS ${ZDOOM_LIBS} DelayImp )
 		endif()
-		list( APPEND ZDOOM_LIBS d3d9 )
+
+		if( ZD_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
+			if( DX_dxguid_LIBRARY )
+				list( APPEND ZDOOM_LIBS "${DX_dxguid_LIBRARY}" )
+			endif()
+			list( APPEND ZDOOM_LIBS d3d9 )
+		endif()
+	else()
+		add_definitions( -D_UWP_PLAT -Dchdir=_chdir -Dgetcwd=_getcwd )
+
+		set( ZDOOM_LIBS xinputuap onecoreuap dxguid.lib )
 	endif()
 else()
 	if( APPLE )
@@ -435,18 +448,30 @@ set( PLAT_WIN32_SOURCES
 	common/platform/win32/win32glvideo.cpp
 	common/platform/win32/win32polyvideo.cpp)
 
-if (HAVE_VULKAN)
+set( PLAT_UWP_SOURCES
+	common/platform/uwp/i_input.cpp
+	common/platform/uwp/i_xinput.cpp
+	common/platform/uwp/i_gui.cpp
+	common/platform/uwp/i_main.cpp
+	common/platform/uwp/st_start.cpp
+	common/platform/uwp/i_video.cpp
+	common/platform/uwp/i_system.cpp
+	common/platform/uwp/i_specialpaths.cpp)
+
+if (HAVE_VULKAN AND NOT UWP_PLATFORM)
 	set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/win32vulkanvideo.cpp )
 endif()
 
 # todo: implement an actual crash catcher for ARM
 # for now this is purely experimental
-if (NOT ${ZDOOM_TARGET_ARCH} MATCHES "arm" )
-	set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/i_crash.cpp )
-endif()
-if (MSVC AND ${ZDOOM_TARGET_ARCH} MATCHES "arm")
-	set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/i_crash_arm.cpp )
-	add_definitions( -DNO_SSE -D__ARM__ -DRAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN)
+if (NOT UWP_PLATFORM)
+	if (NOT ${ZDOOM_TARGET_ARCH} MATCHES "arm" )
+		set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/i_crash.cpp )
+	endif()
+	if (MSVC AND ${ZDOOM_TARGET_ARCH} MATCHES "arm")
+		set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/i_crash_arm.cpp )
+		add_definitions( -DNO_SSE -D__ARM__ -DRAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN)
+	endif()
 endif()
 	
 set( PLAT_POSIX_SOURCES
@@ -478,22 +503,28 @@ set( PLAT_COCOA_SOURCES
 	common/platform/posix/cocoa/st_console.mm
 	common/platform/posix/cocoa/st_start.mm )
 
-if( WIN32 )
+if( UWP_PLATFORM )
+	set( SYSTEM_SOURCES_DIR common/platform/uwp )
+	set( SYSTEM_SOURCES ${PLAT_UWP_SOURCES} uwp/Package.appxManifest ${ZDOOM_OUTPUT_DIR}/gzdoom.pk3 ${ZDOOM_OUTPUT_DIR}/game_support.pk3 ${ZDOOM_OUTPUT_DIR}/game_widescreen_gfx.pk3 ${ZDOOM_OUTPUT_DIR}/brightmaps.pk3 ${ZDOOM_OUTPUT_DIR}/lights.pk3 )
+	set( OTHER_SYSTEM_SOURCES ${PLAT_POSIX_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} ${PLAT_WIN32_SOURCES} )
+	set_source_files_properties( uwp/Package.appxManifest PROPERTIES VS_DEPLOYMENT_CONTENT 1 )
+	set_source_files_properties( ${ZDOOM_OUTPUT_DIR}/gzdoom.pk3 ${ZDOOM_OUTPUT_DIR}/game_support.pk3 ${ZDOOM_OUTPUT_DIR}/game_widescreen_gfx.pk3 ${ZDOOM_OUTPUT_DIR}/brightmaps.pk3 ${ZDOOM_OUTPUT_DIR}/lights.pk3 PROPERTIES VS_DEPLOYMENT_CONTENT 1 )
+elseif( WIN32 )
 	set( SYSTEM_SOURCES_DIR common/platform/win32 )
 	set( SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} )
-	set( OTHER_SYSTEM_SOURCES ${PLAT_POSIX_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} )
+	set( OTHER_SYSTEM_SOURCES ${PLAT_POSIX_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} ${PLAT_UWP_SOURCES} )
 
 	set( SYSTEM_SOURCES ${SYSTEM_SOURCES} win32/zdoom.rc )
 elseif( APPLE )
 	if( OSX_COCOA_BACKEND )
 		set( SYSTEM_SOURCES_DIR common/platform/posix common/platform/posix/cocoa )
 		set( SYSTEM_SOURCES ${PLAT_COCOA_SOURCES} )
-		set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_UNIX_SOURCES} )
+		set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_UNIX_SOURCES} ${PLAT_UWP_SOURCES} )
 	else()
 		set( SYSTEM_SOURCES_DIR common/platform/posix common/platform/posix/sdl )
 		set( SYSTEM_SOURCES ${PLAT_SDL_SOURCES} )
 		set( PLAT_OSX_SOURCES ${PLAT_OSX_SOURCES} common/platform/posix/sdl/i_system.mm )
-		set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} )
+		set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} ${PLAT_UWP_SOURCES} )
 	endif()
 
 	set( SYSTEM_SOURCES ${SYSTEM_SOURCES} ${PLAT_POSIX_SOURCES} ${PLAT_OSX_SOURCES} )
@@ -503,7 +534,7 @@ elseif( APPLE )
 else()
 	set( SYSTEM_SOURCES_DIR common/platform/posix common/platform/posix/sdl )
 	set( SYSTEM_SOURCES ${PLAT_POSIX_SOURCES} ${PLAT_SDL_SOURCES} ${PLAT_UNIX_SOURCES} )
-	set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} )
+	set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UWP_SOURCES} )
 endif()
 
 if( HAVE_MMX )
@@ -597,6 +628,7 @@ file( GLOB HEADER_FILES
 	common/platform/posix/cocoa/*.h
 	common/platform/posix/sdl/*.h
 	common/platform/win32/*.h
+	common/platform/uwp/*.h
 	common/models/*.h
 	common/textures/*.h
 	common/textures/hires/hqnx/*.h
@@ -1475,6 +1507,7 @@ source_group("Common\\Platforms\\OS X Files" REGULAR_EXPRESSION "^${CMAKE_CURREN
 source_group("Common\\Platforms\\Unix Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/platform/posix/unix/.+")
 source_group("Common\\Platforms\\SDL Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/platform/posix/sdl/.+")
 source_group("Common\\Platforms\\Win32 Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/platform/win32/.+")
+source_group("Common\\Platforms\\UWP Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/platform/uwp/.+")
 source_group("Common\\Rendering" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/.+")
 source_group("Common\\Rendering\\Hardware Renderer" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/hwrenderer/.+")
 source_group("Common\\Rendering\\Hardware Renderer\\Data" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/hwrenderer/data/.+")

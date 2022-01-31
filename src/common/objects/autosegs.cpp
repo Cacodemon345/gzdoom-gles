@@ -47,6 +47,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
+#include <psapi.h>
 #elif defined __MACH__
 #include <mach-o/getsect.h>
 #include <mach-o/ldsyms.h>
@@ -79,15 +80,27 @@ AUTOSEG_VARIABLE(MapInfoOptions, AUTOSEG_YREG)
 #undef AUTOSEG_STOP
 #undef AUTOSEG_START
 
-
+extern "C" IMAGE_DOS_HEADER __ImageBase;
 void FAutoSeg::Initialize()
 {
 #ifdef _WIN32
-
-	const HMODULE selfModule = GetModuleHandle(nullptr);
+	const HMODULE selfModule = (HMODULE)&__ImageBase;
 	const SIZE_T baseAddress = reinterpret_cast<SIZE_T>(selfModule);
+	MODULEINFO moduleInfo{};
+	SIZE_T sizeOfImage = 0;
+	GetModuleInformation(GetCurrentProcess(), selfModule, &moduleInfo, sizeof(MODULEINFO));
+	sizeOfImage = moduleInfo.SizeOfImage;
 
-	const PIMAGE_NT_HEADERS header = ImageNtHeader(selfModule);
+	PIMAGE_NT_HEADERS header = nullptr;
+	for (uintptr_t i = 0; i < sizeOfImage; i++)
+	{
+		CHAR* currentModuleAddress = ((CHAR*)selfModule) + i;
+		if (strncmp(currentModuleAddress, "PE\0\0", 4) == 0)
+		{
+			header = (PIMAGE_NT_HEADERS)currentModuleAddress;
+			break;
+		}
+	}
 	PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(header);
 
 	for (WORD i = 0; i < header->FileHeader.NumberOfSections; ++i, ++section)
